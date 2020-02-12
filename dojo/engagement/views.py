@@ -100,6 +100,39 @@ def engagement(request):
 
 
 @user_passes_test(lambda u: u.is_staff)
+def engagements_all(request):
+    filtered = EngagementFilter(
+        request.GET,
+        queryset=Product.objects.filter(
+            ~Q(engagement=None),
+        ).distinct())
+    prods = get_page_items(request, filtered.qs, 25)
+    name_words = [
+        product.name for product in Product.objects.filter(
+            ~Q(engagement=None),
+        ).distinct()
+    ]
+    eng_words = [
+        engagement.name for product in Product.objects.filter(
+            ~Q(engagement=None),
+        ).distinct() for engagement in product.engagement_set.all()
+    ]
+
+    add_breadcrumb(
+        title="All Engagements",
+        top_level=not len(request.GET),
+        request=request)
+
+    return render(
+        request, 'dojo/engagements_all.html', {
+            'products': prods,
+            'filtered': filtered,
+            'name_words': sorted(set(name_words)),
+            'eng_words': sorted(set(eng_words)),
+        })
+
+
+@user_passes_test(lambda u: u.is_staff)
 def new_engagement(request):
     if request.method == 'POST':
         form = EngForm(request.POST)
@@ -113,7 +146,7 @@ def new_engagement(request):
             new_eng.product_id = form.cleaned_data.get('product').id
             new_eng.save()
             tags = request.POST.getlist('tags')
-            t = ", ".join(tags)
+            t = ", ".join('"{0}"'.format(w) for w in tags)
             new_eng.tags = t
             messages.add_message(
                 request,
@@ -165,7 +198,7 @@ def edit_engagement(request, eid):
             temp_form.product_id = form.cleaned_data.get('product').id
             temp_form.save()
             tags = request.POST.getlist('tags')
-            t = ", ".join(tags)
+            t = ", ".join('"{0}"'.format(w) for w in tags)
             eng.tags = t
             messages.add_message(
                 request,
@@ -394,7 +427,7 @@ def add_tests(request, eid):
 
             new_test.save()
             tags = request.POST.getlist('tags')
-            t = ", ".join(tags)
+            t = ", ".join('"{0}"'.format(w) for w in tags)
             new_test.tags = t
 
             # Save the credential to the test
@@ -586,6 +619,17 @@ def import_scan_results(request, eid=None, pid=None):
                             product=t.engagement.product)
 
                         item.endpoints.add(ep)
+                    for endpoint in form.cleaned_data['endpoints']:
+                        ep, created = Endpoint.objects.get_or_create(
+                            protocol=endpoint.protocol,
+                            host=endpoint.host,
+                            path=endpoint.path,
+                            query=endpoint.query,
+                            fragment=endpoint.fragment,
+                            product=t.engagement.product)
+
+                        item.endpoints.add(ep)
+
                     item.save(false_history=True)
 
                     if item.unsaved_tags is not None:
@@ -627,7 +671,7 @@ def import_scan_results(request, eid=None, pid=None):
         prod_id = pid
         custom_breadcrumb = {"", ""}
         product_tab = Product_Tab(prod_id, title=title, tab="findings")
-
+    form.fields['endpoints'].queryset = Endpoint.objects.filter(product__id=product_tab.product.id)
     return render(request, 'dojo/import_scan_results.html', {
         'form': form,
         'product_tab': product_tab,

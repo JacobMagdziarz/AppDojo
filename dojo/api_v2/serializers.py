@@ -169,6 +169,8 @@ class UserSerializer(serializers.ModelSerializer):
 
 class ProductSerializer(TaggitSerializer, serializers.ModelSerializer):
     findings_count = serializers.SerializerMethodField()
+    findings_list = serializers.SerializerMethodField()
+
     tags = TagListSerializerField(required=False)
     product_meta = ProductMetaSerializer(read_only=True, many=True)
 
@@ -183,6 +185,8 @@ class ProductSerializer(TaggitSerializer, serializers.ModelSerializer):
     def get_findings_count(self, obj):
         return obj.findings_count
 
+    def get_findings_list(self, obj):
+        return obj.open_findings_list()
 
 class ProductTypeSerializer(serializers.ModelSerializer):
     class Meta:
@@ -524,6 +528,9 @@ class ImportScanSerializer(TaggitSerializer, serializers.Serializer):
     verified = serializers.BooleanField(default=True)
     scan_type = serializers.ChoiceField(
         choices=ImportScanForm.SCAN_TYPE_CHOICES)
+    endpoint_to_add = serializers.PrimaryKeyRelatedField(queryset=Endpoint.objects.all(),
+                                                         required=False,
+                                                         default=None)
     test_type = serializers.CharField(required=False)
     file = serializers.FileField(required=False)
     engagement = serializers.PrimaryKeyRelatedField(
@@ -542,6 +549,7 @@ class ImportScanSerializer(TaggitSerializer, serializers.Serializer):
         verified = data['verified']
         test_type, created = Test_Type.objects.get_or_create(
             name=data.get('test_type', data['scan_type']))
+        endpoint_to_add = data['endpoint_to_add']
         environment, created = Development_Environment.objects.get_or_create(
             name='Development')
         test = Test(
@@ -620,6 +628,9 @@ class ImportScanSerializer(TaggitSerializer, serializers.Serializer):
                         product=test.engagement.product)
 
                     item.endpoints.add(ep)
+
+                if endpoint_to_add:
+                    item.endpoints.add(endpoint_to_add)
 
                 if item.unsaved_tags is not None:
                     item.tags = item.unsaved_tags
@@ -700,7 +711,9 @@ class ReImportScanSerializer(TaggitSerializer, serializers.Serializer):
     verified = serializers.BooleanField(default=True)
     scan_type = serializers.ChoiceField(
         choices=ImportScanForm.SCAN_TYPE_CHOICES)
-    tags = TagListSerializerField(required=False)
+    endpoint_to_add = serializers.PrimaryKeyRelatedField(queryset=Endpoint.objects.all(),
+                                                          default=None,
+                                                          required=False)
     file = serializers.FileField(required=False)
     test = serializers.PrimaryKeyRelatedField(
         queryset=Test.objects.all())
@@ -709,6 +722,7 @@ class ReImportScanSerializer(TaggitSerializer, serializers.Serializer):
         data = self.validated_data
         test = data['test']
         scan_type = data['scan_type']
+        endpoint_to_add = data['endpoint_to_add']
         min_sev = data['minimum_severity']
         scan_date = data['scan_date']
         verified = data['verified']
@@ -811,7 +825,8 @@ class ReImportScanSerializer(TaggitSerializer, serializers.Serializer):
                             fragment=endpoint.fragment,
                             product=test.engagement.product)
                         finding.endpoints.add(ep)
-
+                    if endpoint_to_add:
+                        finding.endpoints.add(endpoint_to_add)
                     if item.unsaved_tags:
                         finding.tags = item.unsaved_tags
 
@@ -864,15 +879,22 @@ class NoteHistorySerializer(serializers.ModelSerializer):
 
 class NoteSerializer(serializers.ModelSerializer):
     author = UserSerializer(
-        many=False, read_only=True)
+        many=False, read_only=False)
     editor = UserSerializer(
-        read_only=True, many=False)
+        read_only=False, many=False, allow_null=True)
 
     history = NoteHistorySerializer(read_only=True, many=True)
 
     class Meta:
         model = Notes
         fields = '__all__'
+
+
+class AddNewNoteOptionSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = Notes
+        fields = ['entry', 'private']
 
 
 class FindingToFindingImagesSerializer(serializers.Serializer):

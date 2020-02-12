@@ -65,10 +65,17 @@ from dojo.tools.testssl.parser import TestsslCSVParser
 from dojo.tools.hadolint.parser import HadolintParser
 from dojo.tools import SCAN_SONARQUBE_API
 from dojo.tools.aqua.parser import AquaJSONParser
+from dojo.tools.h1.parser import HackerOneJSONParser
+from dojo.tools.xanitizer.parser import XanitizerXMLParser
+from dojo.tools.trivy.parser import TrivyParser
+from dojo.tools.outpost24.parser import Outpost24Parser
+
+
 
 __author__ = 'Jay Paz'
 
 
+# TODO change conditional search of the parser to the mapping
 def import_parser_factory(file, test, active, verified, scan_type=None):
     if scan_type is None:
         scan_type = test.test_type.name
@@ -92,6 +99,8 @@ def import_parser_factory(file, test, active, verified, scan_type=None):
         parser = VeracodeXMLParser(file, test)
     elif scan_type == "Checkmarx Scan":
         parser = CheckmarxXMLParser(file, test)
+    elif scan_type == "Checkmarx Scan detailed":
+        parser = CheckmarxXMLParser(file, test, 'detailed')
     elif scan_type == "Contrast Scan":
         parser = ContrastCSVParser(file, test)
     elif scan_type == "Crashtest Security Scan":
@@ -116,7 +125,7 @@ def import_parser_factory(file, test, active, verified, scan_type=None):
         parser = NspParser(file, test)
     elif scan_type == 'NPM Audit Scan':
         parser = NpmAuditParser(file, test)
-    elif scan_type == 'Symfony Security Check':
+    elif scan_type == 'PHP Symfony Security Check':
         parser = PhpSymfonySecurityCheckParser(file, test)
     elif scan_type == 'Generic Findings Import':
         parser = GenericFindingUploadCsvParser(file, test, active, verified)
@@ -150,6 +159,8 @@ def import_parser_factory(file, test, active, verified, scan_type=None):
         parser = FortifyXMLParser(file, test)
     elif scan_type == 'SonarQube Scan':
         parser = SonarQubeHtmlParser(file, test)
+    elif scan_type == 'SonarQube Scan detailed':
+        parser = SonarQubeHtmlParser(file, test, 'detailed')
     elif scan_type == SCAN_SONARQUBE_API:
         parser = SonarQubeApiImporter(test)
     elif scan_type == 'MobSF Scan':
@@ -208,6 +219,14 @@ def import_parser_factory(file, test, active, verified, scan_type=None):
         parser = HadolintParser(file, test)
     elif scan_type == 'Aqua Scan':
         parser = AquaJSONParser(file, test)
+    elif scan_type == 'HackerOne Cases':
+        parser = HackerOneJSONParser(file, test)
+    elif scan_type == 'Xanitizer Scan':
+        parser = XanitizerXMLParser(file, test)
+    elif scan_type == 'Trivy Scan':
+        parser = TrivyParser(file, test)
+    elif scan_type == 'Outpost24 Scan':
+        parser = Outpost24Parser(file, test)
     else:
         raise ValueError('Unknown Test Type')
 
