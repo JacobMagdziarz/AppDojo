@@ -9,29 +9,29 @@
 
 import argparse
 import csv
-import re
+import logging
+import datetime
 from dojo.models import Finding, Endpoint
+
+logger = logging.getLogger(__name__)
 ################################################################
 
 # Non-standard libraries
 try:
     from lxml import etree
 except ImportError:
-    print("Missing lxml library. Please install using PIP. https://pypi.python.org/pypi/lxml/3.4.2")
-    exit()
+    logger.debug("Missing lxml library. Please install using PIP. https://pypi.python.org/pypi/lxml/3.4.2")
 
 try:
     import html2text
 except ImportError:
-    print("Missing html2text library. Please install using PIP. https://pypi.python.org/pypi/html2text/2015.2.18")
-    exit()
+    logger.debug("Missing html2text library. Please install using PIP. https://pypi.python.org/pypi/html2text/2015.2.18")
 
 # Custom libraries
 try:
     from . import utfdictcsv
 except ImportError:
-    print("Missing dict to csv converter custom library. utfdictcsv.py should be in the same path as this file.")
-    exit()
+    logger.debug("Missing dict to csv converter custom library. utfdictcsv.py should be in the same path as this file.")
 
 ################################################################
 
@@ -122,6 +122,18 @@ def issue_r(raw_row, vuln):
         _first_found = str(vuln_details.findtext('FIRST_FOUND'))
         _last_found = str(vuln_details.findtext('LAST_FOUND'))
         _times_found = str(vuln_details.findtext('TIMES_FOUND'))
+
+        _temp['date'] = datetime.datetime.strptime(vuln_details.findtext('LAST_FOUND'), "%Y-%m-%dT%H:%M:%SZ").date()
+        # Vuln_status
+        status = vuln_details.findtext('VULN_STATUS')
+        if status == "Active" or status == "Re-Opened" or status == "New":
+            _temp['active'] = True
+            _temp['mitigated'] = False
+            _temp['mitigation_date'] = None
+        else:
+            _temp['active'] = False
+            _temp['mitigated'] = True
+            _temp['mitigation_date'] = datetime.datetime.strptime(vuln_details.findtext('LAST_FIXED'), "%Y-%m-%dT%H:%M:%SZ").date()
         search = "//GLOSSARY/VULN_DETAILS_LIST/VULN_DETAILS[@id='{}']".format(_gid)
         vuln_item = vuln.find(search)
         if vuln_item is not None:
@@ -160,7 +172,7 @@ def issue_r(raw_row, vuln):
         # The CVE in Qualys report might not have a CVSS score, so findings are informational by default
         # unless we can find map to a Severity OR a CVSS score from the findings detail.
         sev = None
-        if _temp['CVSS_score'] is not None:
+        if _temp['CVSS_score'] is not None and float(_temp['CVSS_score']) > 0:
             if 0.1 <= float(_temp['CVSS_score']) <= 3.9:
                 sev = 'Low'
             elif 4.0 <= float(_temp['CVSS_score']) <= 6.9:
@@ -191,6 +203,8 @@ def issue_r(raw_row, vuln):
                               severity=sev,
                               references=refs,
                               impact=_temp['IMPACT'],
+                              date=_temp['date'],
+                              unique_id_from_tool=_gid,
                               )
 
         else:
@@ -200,7 +214,13 @@ def issue_r(raw_row, vuln):
                               severity=sev,
                               references=_gid,
                               impact=_temp['IMPACT'],
+                              date=_temp['date'],
+                              unique_id_from_tool=_gid,
                               )
+        finding.mitigated = _temp['mitigation_date']
+        finding.is_Mitigated = _temp['mitigated']
+        finding.active = _temp['active']
+        finding.verified = True
         finding.unsaved_endpoints = list()
         finding.unsaved_endpoints.append(ep)
         ret_rows.append(finding)
@@ -208,7 +228,7 @@ def issue_r(raw_row, vuln):
 
 
 def qualys_parser(qualys_xml_file):
-    parser = etree.XMLParser(remove_blank_text=True, no_network=True, recover=True)
+    parser = etree.XMLParser(resolve_entities=False, remove_blank_text=True, no_network=True, recover=True)
     d = etree.parse(qualys_xml_file, parser)
     r = d.xpath('//ASSET_DATA_REPORT/HOST_LIST/HOST')
     master_list = []

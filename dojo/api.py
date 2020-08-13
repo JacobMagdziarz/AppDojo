@@ -14,19 +14,21 @@ from tastypie.serializers import Serializer
 from tastypie.validation import FormValidation, Validation
 from django.urls.exceptions import Resolver404
 from django.utils import timezone
+from django.db.models import Count, Q
 
 from dojo.models import Product, Engagement, Test, Finding, \
     User, ScanSettings, IPScan, Scan, Stub_Finding, Risk_Acceptance, \
     Finding_Template, Test_Type, Development_Environment, \
     BurpRawRequestResponse, Endpoint, Notes, JIRA_PKey, JIRA_Conf, \
     JIRA_Issue, Tool_Product_Settings, Tool_Configuration, Tool_Type, \
-    Languages, Language_Type, App_Analysis, Product_Type
+    Languages, Language_Type, App_Analysis, Product_Type, Note_Type
 from dojo.forms import ProductForm, EngForm, TestForm, \
     ScanSettingsForm, FindingForm, StubFindingForm, FindingTemplateForm, \
     ImportScanForm, SEVERITY_CHOICES, JIRAForm, JIRA_PKeyForm, EditEndpointForm, \
     JIRA_IssueForm, ToolConfigForm, ToolProductSettingsForm, \
     ToolTypeForm, LanguagesTypeForm, Languages_TypeTypeForm, App_AnalysisTypeForm, \
-    Development_EnvironmentForm, Product_TypeForm, Test_TypeForm
+    Development_EnvironmentForm, Product_TypeForm, Test_TypeForm, NoteTypeForm
+from dojo.tools import requires_file
 from dojo.tools.factory import import_parser_factory
 from datetime import datetime
 from .object.parser import import_object_eng
@@ -371,6 +373,7 @@ class ProductResource(BaseModelResource):
         list_allowed_methods = ['get', 'post']  # only allow get for lists
         detail_allowed_methods = ['get', 'post', 'put']
         queryset = Product.objects.all().order_by('name')
+        queryset = queryset.annotate(active_finding_count=Count('engagement__test__finding__id', filter=Q(engagement__test__finding__active=True)))
         ordering = ['name', 'id', 'description', 'findings_count', 'created',
                     'product_type_id']
         excludes = ['tid', 'manager', 'prod_manager', 'tech_contact',
@@ -497,6 +500,44 @@ class Tool_ConfigurationResource(BaseModelResource):
 
 
 """
+    /api/v1/note_type/
+    GET [/id/], DELETE [/id/]
+    Expects: no params or id
+    Returns Note_TypeResource
+    Relevant apply filter ?test_type=?, ?id=?
+
+    POST, PUT, DLETE [/id/]
+"""
+
+
+class Note_TypeResource(BaseModelResource):
+
+    # note_type = fields.ForeignKey(Note_Type, 'note_Type')
+
+    class Meta:
+        resource_name = 'note_type'
+        list_allowed_methods = ['get', 'post', 'put', 'delete']
+        detail_allowed_methods = ['get', 'post', 'put', 'delete']
+        queryset = Note_Type.objects.all()
+        include_resource_uri = True
+        filtering = {
+            'id': ALL,
+            'name': ALL,
+            'description': ALL_WITH_RELATIONS,
+            'is_single': ALL,
+            'is_active': ALL,
+            'is_mandatory': ALL,
+        }
+        authentication = DojoApiKeyAuthentication()
+        authorization = DjangoAuthorization()
+        serializer = Serializer(formats=['json'])
+
+        @property
+        def validation(self):
+            return ModelFormValidation(form_class=NoteTypeForm, resource=Note_TypeResource)
+
+
+"""
     POST, PUT [/id/]
     Expects *product *target_start, *target_end, *status[In Progress, On Hold,
     Completed], threat_model, pen_test, api_test, check_list
@@ -536,6 +577,8 @@ class EngagementResource(BaseModelResource):
             'pen_test': ALL,
             'status': ALL,
             'product': ALL,
+            'name': ALL,
+            'product_id': ALL,
         }
         authentication = DojoApiKeyAuthentication()
         authorization = DjangoAuthorization()
@@ -913,6 +956,8 @@ class TestTypeResource(BaseModelResource):
         filtering = {
             'id': ALL,
             'name': ALL,
+            'title': ALL,
+            'engagement': ALL,
         }
         authentication = DojoApiKeyAuthentication()
         authorization = DjangoAuthorization()
@@ -949,6 +994,7 @@ class TestResource(BaseModelResource):
         include_resource_uri = True
         filtering = {
             'id': ALL,
+            'title': ALL,
             'test_type': ALL,
             'target_start': ALL,
             'target_end': ALL,
@@ -1294,7 +1340,7 @@ class ImportScanValidation(Validation):
         errors = {}
 
         # Make sure file is present
-        if 'file' not in bundle.data:
+        if 'file' not in bundle.data and requires_file(bundle.data.get('scan_type')):
             errors.setdefault('file', []).append('You must pass a file in to be imported')
 
         # Make sure scan_date matches required format
@@ -1463,7 +1509,7 @@ class ImportScanResource(MultipartResource, Resource):
         t.tags = bundle.data['tags']
 
         try:
-            parser = import_parser_factory(bundle.data['file'], t, bundle.data['active'], bundle.data['verified'],
+            parser = import_parser_factory(bundle.data.get('file', None), t, bundle.data['active'], bundle.data['verified'],
                                            bundle.data['scan_type'])
         except ValueError:
             raise NotFound("Parser ValueError")
@@ -1536,8 +1582,8 @@ class ReImportScanValidation(Validation):
 
         errors = {}
 
-        # Make sure file is present
-        if 'file' not in bundle.data:
+        # Make sure file is present if scanner requires a file
+        if 'file' not in bundle.data and requires_file(bundle.data['scan_type']):
             errors.setdefault('file', []).append('You must pass a file in to be imported')
 
         # Make sure scan_date matches required format
@@ -1646,7 +1692,7 @@ class ReImportScanResource(MultipartResource, Resource):
         active = bundle.obj.__getattr__('active')
 
         try:
-            parser = import_parser_factory(bundle.data['file'], test, active, verified, scan_type)
+            parser = import_parser_factory(bundle.data.get('file', None), test, active, verified, scan_type)
         except ValueError:
             raise NotFound("Parser ValueError")
 

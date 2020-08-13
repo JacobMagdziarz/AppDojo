@@ -54,12 +54,15 @@ def get_item(item_node, test):
                       str(item_node['vulnerability']),
                       mitigation=item_node['fixedby'],
                       references=item_node['link'],
+                      cve=item_node['vulnerability'],
                       active=False,
                       verified=False,
                       false_p=False,
                       duplicate=False,
                       out_of_scope=False,
                       mitigated=None,
+                      static_finding=True,
+                      dynamic_finding=False,
                       impact="No impact provided")
 
     return finding

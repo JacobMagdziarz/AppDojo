@@ -1,8 +1,5 @@
 #!/bin/sh
 
-umask 0002
-
-
 
 # Copy settings.py (settings.py copied to allow for legacy installs and customizations)
 cd /app
@@ -16,4 +13,9 @@ exec uwsgi \
   "--${DD_UWSGI_MODE}" "${DD_UWSGI_ENDPOINT}" \
   --protocol uwsgi \
   --wsgi dojo.wsgi:application \
+  --enable-threads \
+  --processes 2 \
+  --threads 2 \
+  --reload-mercy 1 \
+  --worker-reload-mercy 1 \
   --py-autoreload 1

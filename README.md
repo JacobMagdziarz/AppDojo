@@ -42,8 +42,8 @@ For detailed documentation you can visit
 
 ## Supported Installation Options
 
-* [Setup.bash](https://github.com/DefectDojo/django-DefectDojo/blob/master/setup/README.MD)
-* [Docker](DOCKER.md)
+* [Docker / Docker Compose](DOCKER.md)
+* [Setup.bash](https://github.com/DefectDojo/django-DefectDojo/blob/master/setup/README.md)
 
 ## Getting Started
 
@@ -56,20 +56,22 @@ We've also created some example
 [workflows](https://defectdojo.readthedocs.io/en/latest/workflows.html) that
 should give you an idea of how to use DefectDojo for your own team.
 
-## Client APIs
+## Client APIs and wrappers
+This section presents different ways to programmatically interact with defectdojo APIs.
 
-* Install the DefectDojo Python API via `pip install defectdojo_api` or clone
-  the [repository](https://github.com/aaronweaver/defectdojo_api).
-* Browse the API on
-  [SwaggerHub](https://app.swaggerhub.com/apis/DefectDojo/defect-dojo_api_v_2/1.0.0).
-  [![Swagger Status](http://online.swagger.io/validator?url=https://api.swaggerhub.com/apis/DefectDojo/defect-dojo_api_v_2/1.0.0)](https://app.swaggerhub.com/apis/DefectDojo/defect-dojo_api_v_2/1.0.0)
+See [Wrappers](WRAPPERS.md)
+
+
+## Release and branch model
+See [Release and branch model](BRANCHING-MODEL.md)
+
 
 ## Getting Involved
 
 ![Slack](https://raw.githubusercontent.com/DefectDojo/Documentation/master/doc/img/slack_rgb.png)
 
 Realtime discussion is done in the OWASP Slack Channel, #defectdojo.
-[Get Access.](https://join.slack.com/t/owasp/shared_invite/enQtNjExMTc3MTg0MzU4LTViMDg1MmJiMzMwZGUxZjgxZWQ1MTE0NTBlOTBhNjhhZDIzZTZiNmEwOTJlYjdkMzAxMGVhNDkwNDNiNjZiOWQ)
+[Get Access.](https://owasp-slack.herokuapp.com/)
 
 ![Twitter](https://raw.githubusercontent.com/DefectDojo/Documentation/master/doc/img/Twitter_Logo.png)
 
@@ -105,16 +107,17 @@ Project Moderators can help you with pull requests or feedback on dev ideas.
 * [Alex Dracea](https://www.linkedin.com/in/alexandru-marin-dracea-910b51122/)
 * [Valentijn Scholten](https://www.linkedin.com/in/valentijn-scholten/)
 * Jannik Jürgens
-* Fred Blaise
+* [Fred Blaise](https://www.linkedin.com/in/fredblaise/)
 * Saurabh kumar
 * Cody Maffucci 
+* Pascal Trovatelli / [Sopra Steria](https://www.soprasteria.com/)
 
 ## Hall of Fame
 
 * Charles Neill ([@ccneill](https://twitter.com/ccneill)) – Charles served as a
     DefectDojo Maintainer for years and wrote some of Dojo's core functionality.
 * Jay Paz ([@jjpaz](https://twitter.com/jjpaz)) – Jay was a DefectDojo
-  maintainer for years. He performed Dojo's first UI overhaul, optomized code structure/features, and added numerous enhancements.
+  maintainer for years. He performed Dojo's first UI overhaul, optimized code structure/features, and added numerous enhancements.
 
 
 ## Contributing
@@ -148,6 +151,7 @@ Proceeds are used for testing, infrastructure, etc.
 [![SDA-SE](https://raw.githubusercontent.com/DefectDojo/Documentation/master/doc/img/sda-se-logo.png)](https://sda-se.com/)
 [![Signal-Iduna](https://raw.githubusercontent.com/DefectDojo/Documentation/master/doc/img/signal-iduna.png)](https://signal-iduna.de/)
 [![WSO2](https://raw.githubusercontent.com/DefectDojo/Documentation/master/doc/img/wso2-logo-for-screen.png)](https://wso2.com/)
+[![CloudBees](https://raw.githubusercontent.com/DefectDojo/Documentation/master/doc/img/cloudbees-logo.png)](https://cloudbees.com/)
 
 Interested in becoming a sponsor and having your logo displayed? Please review
 our [sponsorship information](SPONSORING.md) or email greg.anderson@owasp.org

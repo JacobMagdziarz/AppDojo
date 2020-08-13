@@ -1,7 +1,7 @@
 import logging
 from django.contrib import messages
 from django.contrib.auth import authenticate, logout
-from django.contrib.auth.decorators import user_passes_test
+from django.contrib.auth.decorators import user_passes_test, login_required
 from django.core import serializers
 from django.core.exceptions import PermissionDenied
 from django.urls import reverse
@@ -15,7 +15,7 @@ from tastypie.models import ApiKey
 
 from dojo.filters import UserFilter
 from dojo.forms import DojoUserForm, AddDojoUserForm, DeleteUserForm, APIKeyForm, UserContactInfoForm
-from dojo.models import Product, Dojo_User, UserContactInfo, Alerts
+from dojo.models import Product, Dojo_User, Alerts
 from dojo.utils import get_page_items, add_breadcrumb
 
 logger = logging.getLogger(__name__)
@@ -166,6 +166,7 @@ def migrate_alerts(request):
                     {'alerts': alerts})
 
 
+@login_required
 def alerts_json(request, limit=None):
     limit = request.GET.get('limit')
     if limit:
@@ -182,11 +183,7 @@ def alertcount(request):
 
 def view_profile(request):
     user = get_object_or_404(Dojo_User, pk=request.user.id)
-    try:
-        user_contact = UserContactInfo.objects.get(user=user)
-    except UserContactInfo.DoesNotExist:
-        user_contact = None
-
+    user_contact = user.usercontactinfo if hasattr(user, 'usercontactinfo') else None
     form = DojoUserForm(instance=user)
     if user_contact is None:
         contact_form = UserContactInfoForm()
@@ -248,7 +245,7 @@ def change_password(request):
 
 @user_passes_test(lambda u: u.is_staff)
 def user(request):
-    users = Dojo_User.objects.all().order_by('username', 'last_name', 'first_name')
+    users = Dojo_User.objects.all().select_related("usercontactinfo").order_by('username', 'last_name', 'first_name')
     users = UserFilter(request.GET, queryset=users)
     paged_users = get_page_items(request, users.qs, 25)
     add_breadcrumb(title="All Users", top_level=True, request=request)
@@ -312,10 +309,9 @@ def edit_user(request, uid):
         form.fields['is_staff'].widget.attrs['disabled'] = True
         form.fields['is_superuser'].widget.attrs['disabled'] = True
         form.fields['is_active'].widget.attrs['disabled'] = True
-    try:
-        user_contact = UserContactInfo.objects.get(user=user)
-    except UserContactInfo.DoesNotExist:
-        user_contact = None
+
+    user_contact = user.usercontactinfo if hasattr(user, 'usercontactinfo') else None
+
     if user_contact is None:
         contact_form = UserContactInfoForm()
     else:

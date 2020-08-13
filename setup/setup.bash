@@ -31,6 +31,9 @@ LIB_PATH="$SETUP_BASE/scripts/common"
 . "$LIB_PATH/common-os.sh"       # Determine what OS the installer is running on
 . "$LIB_PATH/install-dojo.sh"    # Complete an install of Dojo based on previously run code
 
+# Print the EOL message
+print_eol_message
+
 # Read command-line arguments, if any and set/override config defaults as needed
 #   Function in ./scripts/common/cmd-args.sh
 read_cmd_args
@@ -110,7 +113,6 @@ echo "        SESSION_COOKIE_SECURE = True"
 echo "        CSRF_COOKIE_SECURE = True"
 echo "        SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')"
 echo "        SECURE_SSL_REDIRECT = True"
-echo "        SECURE_BROWSER_XSS_FILTER = True"
 echo "        django.middleware.security.SecurityMiddleware"
 echo
 echo "When you're ready to start the DefectDojo server, type in this directory:"

@@ -9,16 +9,41 @@ __author__ = 'dr3dd589'
 
 
 WEAK_CIPHER_LIST = [
+    "TLS_DHE_RSA_WITH_AES_128_CBC_SHA",
+    "TLS_DHE_RSA_WITH_AES_128_CBC_SHA256",
+    "TLS_DHE_RSA_WITH_AES_256_CBC_SHA",
+    "TLS_DHE_RSA_WITH_AES_256_CBC_SHA256",
+    "TLS_DHE_RSA_WITH_CAMELLIA_128_CBC_SHA",
+    "TLS_DHE_RSA_WITH_CAMELLIA_128_CBC_SHA256",
+    "TLS_DHE_RSA_WITH_CAMELLIA_256_CBC_SHA",
+    "TLS_DHE_RSA_WITH_CAMELLIA_256_CBC_SHA256",
+    "TLS_DHE_RSA_WITH_SEED_CBC_SHA",
     "TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA",
+    "TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA",
+    "TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256",
+    "TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA",
+    "TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384",
+    "TLS_ECDHE_RSA_WITH_CAMELLIA_128_CBC_SHA256",
+    "TLS_ECDHE_RSA_WITH_CAMELLIA_256_CBC_SHA384",
+    "TLS_RSA_WITH_3DES_EDE_CBC_SHA",
     "TLS_RSA_WITH_AES_128_CBC_SHA",
     "TLS_RSA_WITH_AES_128_CBC_SHA256",
+    "TLS_RSA_WITH_AES_128_CCM",
+    "TLS_RSA_WITH_AES_128_CCM_8",
     "TLS_RSA_WITH_AES_128_GCM_SHA256",
     "TLS_RSA_WITH_AES_256_CBC_SHA",
     "TLS_RSA_WITH_AES_256_CBC_SHA256",
+    "TLS_RSA_WITH_AES_256_CCM",
+    "TLS_RSA_WITH_AES_256_CCM_8",
     "TLS_RSA_WITH_AES_256_GCM_SHA384",
-    "TLS_RSA_WITH_3DES_EDE_CBC_SHA",
+    "TLS_RSA_WITH_ARIA_128_GCM_SHA256",
+    "TLS_RSA_WITH_ARIA_256_GCM_SHA384",
+    "TLS_RSA_WITH_CAMELLIA_128_CBC_SHA",
+    "TLS_RSA_WITH_CAMELLIA_128_CBC_SHA256",
     "TLS_RSA_WITH_CAMELLIA_256_CBC_SHA",
-    "TLS_RSA_WITH_CAMELLIA_128_CBC_SHA"
+    "TLS_RSA_WITH_CAMELLIA_256_CBC_SHA256",
+    "TLS_RSA_WITH_IDEA_CBC_SHA",
+    "TLS_RSA_WITH_SEED_CBC_SHA"
 ]
 
 PROTOCOLS = [
@@ -66,22 +91,25 @@ class SslyzeXmlParser(object):
                 weak_cipher = {}
                 if element.tag == 'heartbleed':
                     heartbleed_element = element.find('openSslHeartbleed')
-                    if heartbleed_element.attrib['isVulnerable'] == 'True':
-                        title = element.attrib['title'] + " | " + url
-                        description = "**heartbleed** : Vulnerable" + "\n\n" + \
-                                    "**title** : " + element.attrib['title']
+                    if 'isVulnerable' in heartbleed_element.attrib:
+                        if heartbleed_element.attrib['isVulnerable'] == 'True':
+                            title = element.attrib['title'] + " | " + url
+                            description = "**heartbleed** : Vulnerable" + "\n\n" + \
+                                        "**title** : " + element.attrib['title']
                 if element.tag == 'openssl_ccs':
                     openssl_ccs_element = element.find('openSslCcsInjection')
-                    if openssl_ccs_element.attrib['isVulnerable'] == 'True':
-                        title = element.attrib['title'] + " | " + url
-                        description = "**openssl_ccs** : Vulnerable" + "\n\n" + \
-                                    "**title** : " + element.attrib['title']
+                    if 'isVulnerable' in openssl_ccs_element.attrib:
+                        if openssl_ccs_element.attrib['isVulnerable'] == 'True':
+                            title = element.attrib['title'] + " | " + url
+                            description = "**openssl_ccs** : Vulnerable" + "\n\n" + \
+                                        "**title** : " + element.attrib['title']
                 if element.tag == 'reneg':
                     reneg_element = element.find('sessionRenegotiation')
-                    if reneg_element.attrib['isSecure'] == 'False':
-                        title = element.attrib['title'] + " | " + url
-                        description = "**Session Renegotiation** : Vulnerable" + "\n\n" + \
-                                    "**title** : " + element.attrib['title']
+                    if 'isSecure' in reneg_element.attrib:
+                        if reneg_element.attrib['isSecure'] == 'False':
+                            title = element.attrib['title'] + " | " + url
+                            description = "**Session Renegotiation** : Vulnerable" + "\n\n" + \
+                                        "**title** : " + element.attrib['title']
                 if element.tag in PROTOCOLS and element.attrib['isProtocolSupported'] == "True":
                     weak_cipher[element.tag] = []
                     for ciphers in element:

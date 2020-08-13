@@ -8,33 +8,57 @@ from django.utils.safestring import mark_safe, SafeData
 from django.utils.text import normalize_newlines
 from django.urls import reverse
 from django.contrib.auth.models import User
-from dojo.utils import prepare_for_view, get_system_setting
+from dojo.utils import prepare_for_view, get_system_setting, get_full_url
 from dojo.models import Check_List, FindingImageAccessToken, Finding, System_Settings, JIRA_PKey, Product
 import markdown
 from django.db.models import Sum, Case, When, IntegerField, Value
 from django.utils import timezone
-from markdown.extensions import Extension
 import dateutil.relativedelta
 import datetime
 from ast import literal_eval
 from urllib.parse import urlparse
 import bleach
-from bleach_whitelist import markdown_tags, markdown_attrs
 import git
+from django.conf import settings
+
+
 register = template.Library()
 
+# Tags suitable for rendering markdown
+markdown_tags = [
+    "h1", "h2", "h3", "h4", "h5", "h6",
+    "b", "i", "strong", "em", "tt",
+    "table", "thead", "th", "tbody", "tr", "td",  # enables markdown.extensions.tables
+    "p", "br",
+    "pre", "div",  # used for code highlighting
+    "span", "div", "blockquote", "code", "hr", "pre",
+    "ul", "ol", "li", "dd", "dt",
+    "img",
+    "a",
+    "sub", "sup",
+]
 
-class EscapeHtml(Extension):
-    def extendMarkdown(self, md, md_globals):
-        del md.preprocessors['html_block']
-        del md.inlinePatterns['html']
+markdown_attrs = {
+    "*": ["id"],
+    "img": ["src", "alt", "title"],
+    "a": ["href", "alt", "title"],
+    "span": ["class"],  # used for code highlighting
+    "pre": ["class"],  # used for code highlighting
+    "div": ["class"],  # used for code highlighting
+}
 
 
 @register.filter
 def markdown_render(value):
     if value:
-        value = bleach.clean(markdown.markdown(value), markdown_tags, markdown_attrs)
-        return mark_safe(markdown.markdown(value, extensions=['markdown.extensions.nl2br', 'markdown.extensions.sane_lists', 'markdown.extensions.codehilite', 'markdown.extensions.fenced_code', 'markdown.extensions.toc', 'markdown.extensions.tables']))
+        markdown_text = markdown.markdown(value,
+                                          extensions=['markdown.extensions.nl2br',
+                                                      'markdown.extensions.sane_lists',
+                                                      'markdown.extensions.codehilite',
+                                                      'markdown.extensions.fenced_code',
+                                                      'markdown.extensions.toc',
+                                                      'markdown.extensions.tables'])
+        return mark_safe(bleach.clean(markdown_text, markdown_tags, markdown_attrs))
 
 
 @register.filter(name='ports_open')
@@ -148,21 +172,21 @@ def asvs_calc_level(benchmark_score):
     total = 0
     if benchmark_score:
         total = benchmark_score.asvs_level_1_benchmark + \
-            benchmark_score.asvs_level_2_benchmark + benchmark_score.asvs_level_3_benchmark
+                benchmark_score.asvs_level_2_benchmark + benchmark_score.asvs_level_3_benchmark
         total_pass = benchmark_score.asvs_level_1_score + \
-            benchmark_score.asvs_level_2_score + benchmark_score.asvs_level_3_score
+                     benchmark_score.asvs_level_2_score + benchmark_score.asvs_level_3_score
 
         if benchmark_score.desired_level == "Level 1":
             total = benchmark_score.asvs_level_1_benchmark
             total_pass = benchmark_score.asvs_level_1_score
         elif benchmark_score.desired_level == "Level 2":
             total = benchmark_score.asvs_level_1_benchmark + \
-                benchmark_score.asvs_level_2_benchmark
+                    benchmark_score.asvs_level_2_benchmark
             total_pass = benchmark_score.asvs_level_1_score + \
-                benchmark_score.asvs_level_2_score
+                         benchmark_score.asvs_level_2_score
         elif benchmark_score.desired_level == "Level 3":
             total = benchmark_score.asvs_level_1_benchmark + \
-                benchmark_score.asvs_level_2_benchmark + benchmark_score.asvs_level_3_benchmark
+                    benchmark_score.asvs_level_2_benchmark + benchmark_score.asvs_level_3_benchmark
 
         level = percentage(total_pass, total)
 
@@ -184,7 +208,8 @@ def asvs_level(benchmark_score):
     else:
         level = "(" + level + ")"
 
-    return "ASVS " + str(benchmark_score.desired_level) + " " + level + " Pass: " + str(total_pass) + " Total:  " + total
+    return "ASVS " + str(benchmark_score.desired_level) + " " + level + " Pass: " + str(
+        total_pass) + " Total:  " + total
 
 
 @register.filter(name='get_jira_conf')
@@ -201,47 +226,6 @@ def version_num(value):
         version = "v." + value
 
     return version
-
-
-@register.filter(name='count_findings_eng')
-def count_findings_eng(tests):
-    findings = None
-    for test in tests:
-        if findings:
-            findings = findings | test.finding_set.all()
-        else:
-            findings = test.finding_set.all()
-    return findings
-
-
-@register.filter(name='count_findings_eng_open')
-def count_findings_eng_open(engagement):
-    open_findings = Finding.objects.filter(test__engagement=engagement,
-                                           false_p=False,
-                                           verified=True,
-                                           duplicate=False,
-                                           out_of_scope=False,
-                                           active=True,
-                                           mitigated__isnull=True).count()
-    return open_findings
-
-
-@register.filter(name='count_findings_eng_all')
-def count_findings_eng_all(engagement):
-    all_findings = Finding.objects.filter(test__engagement=engagement).count()
-    return all_findings
-
-
-@register.filter(name='fetch_system_setting')
-def fetch_system_setting(name):
-    return get_system_setting(name)
-
-
-@register.filter(name='count_findings_eng_duplicate')
-def count_findings_eng_duplicate(engagement):
-    duplicate_findings = Finding.objects.filter(test__engagement=engagement,
-                                                duplicate=True).count()
-    return duplicate_findings
 
 
 @register.filter(name='count_findings_test_all')
@@ -287,7 +271,7 @@ def finding_sla(finding):
 
     title = ""
     severity = finding.severity
-    find_sla = finding.sla()
+    find_sla = finding.sla_days_remaining()
     sla_age = get_system_setting('sla_' + severity.lower())
     if finding.mitigated:
         status = "blue"
@@ -295,18 +279,20 @@ def finding_sla(finding):
         if find_sla and find_sla < 0:
             status = "orange"
             find_sla = abs(find_sla)
-            status_text = 'Out of SLA: Remediatied ' + str(find_sla) + ' days past SLA for ' + severity.lower() + ' findings (' + str(sla_age) + ' days)'
+            status_text = 'Out of SLA: Remediatied ' + str(
+                find_sla) + ' days past SLA for ' + severity.lower() + ' findings (' + str(sla_age) + ' days)'
     else:
         status = "green"
         status_text = 'Remediation for ' + severity.lower() + ' findings in ' + str(sla_age) + ' days or less'
         if find_sla and find_sla < 0:
             status = "red"
             find_sla = abs(find_sla)
-            status_text = 'Overdue: Remediation for ' + severity.lower() + ' findings in ' + str(sla_age) + ' days or less'
+            status_text = 'Overdue: Remediation for ' + severity.lower() + ' findings in ' + str(
+                sla_age) + ' days or less'
 
     if find_sla is not None:
         title = '<a data-toggle="tooltip" data-placement="bottom" title="" href="#" data-original-title="' + status_text + '">' \
-                '<span class="label severity age-' + status + '">' + str(find_sla) + '</span></a>'
+                                                                                                                           '<span class="label severity age-' + status + '">' + str(find_sla) + '</span></a>'
 
     return mark_safe(title)
 
@@ -352,6 +338,7 @@ def finding_status(finding, duplicate):
 @register.simple_tag
 def random_html():
     def r(): return random.randint(0, 255)
+
     return ('#%02X%02X%02X' % (r(), r(), r()))
 
 
@@ -363,7 +350,7 @@ def action_log_entry(value, autoescape=None):
     text = ''
     for k in history.keys():
         text += k.capitalize() + ' changed from "' + \
-            history[k][0] + '" to "' + history[k][1] + '"'
+                history[k][0] + '" to "' + history[k][1] + '"'
 
     return text
 
@@ -480,6 +467,11 @@ def severity_value(value):
         pass
 
     return value
+
+
+@register.simple_tag
+def severity_number_value(value):
+    return Finding.get_number_severity(value)
 
 
 @register.filter
@@ -648,7 +640,7 @@ def get_severity_count(id, table):
                      output_field=IntegerField())),
         )
     elif table == "engagement":
-        counts = Finding.objects.filter(test__engagement=id, active=True, verified=True, duplicate=False). \
+        counts = Finding.objects.filter(test__engagement=id, active=True, verified=False, duplicate=False). \
             prefetch_related('test__engagement__product').aggregate(
             total=Sum(
                 Case(When(severity__in=('Critical', 'High', 'Medium', 'Low'),
@@ -735,10 +727,88 @@ def get_severity_count(id, table):
     if table == "test":
         display_counts.append("Total: " + str(total) + " Findings")
     elif table == "engagement":
-        display_counts.append("Total: " + str(total) + " Active, Verified Findings")
+        display_counts.append("Total: " + str(total) + " Active Findings")
     elif table == "product":
         display_counts.append("Total: " + str(total) + " Active Findings")
 
     display_counts = ", ".join([str(item) for item in display_counts])
 
     return display_counts
+
+
+@register.filter
+def full_url(url):
+    return get_full_url(url)
+
+
+# check if setting is enabled in django settings.py
+# use 'DISABLE_FINDING_MERGE'|setting_enabled
+@register.filter
+def setting_enabled(name):
+    return getattr(settings, name, False)
+
+
+@register.filter
+def finding_display_status(finding):
+    # add urls for some statuses
+    # outputs html, so make sure to escape user provided fields
+    display_status = finding.status()
+    if finding.risk_acceptance_set.all():
+        url = reverse('view_risk', args=(finding.test.engagement.id, finding.risk_acceptance_set.all()[0].id, ))
+        name = finding.risk_acceptance_set.all()[0].name
+        link = '<a href="' + url + '" class="has-popover" data-trigger="hover" data-placement="right" data-content="' + escape(name) + '" data-container="body" data-original-title="Risk Acceptance">Risk Accepted</a>'
+        # print(link)
+        display_status = display_status.replace('Risk Accepted', link)
+
+    if finding.under_review:
+        url = reverse('defect_finding_review', args=(finding.id, ))
+        link = '<a href="' + url + '">Under Review</a>'
+        display_status = display_status.replace('Under Review', link)
+
+    if finding.duplicate:
+        url = '#'
+        name = 'unknown'
+        if finding.duplicate_finding:
+            url = reverse('view_finding', args=(finding.duplicate_finding.id,))
+            name = finding.duplicate_finding.title + ', ' + \
+                   finding.duplicate_finding.created.strftime('%b %d, %Y, %H:%M:%S')
+
+        link = '<a href="' + url + '" data-toggle="tooltip" data-placement="top" title="' + escape(
+            name) + '">Duplicate</a>'
+        display_status = display_status.replace('Duplicate', link)
+
+    return display_status
+
+
+@register.filter
+def is_authorized_for_change(user, finding):
+    # print('filter: is_authorized_for_change')
+    return finding.is_authorized(user, 'change')
+
+
+@register.filter
+def is_authorized_for_delete(user, finding):
+    # print('filter: is_authorized_for_delete')
+    return finding.is_authorized(user, 'delete')
+
+
+@register.filter
+def cwe_url(cwe):
+    if not cwe:
+        return ''
+    return 'https://cwe.mitre.org/data/definitions/' + str(cwe) + '.html'
+
+
+@register.filter
+def cve_url(cve):
+    if not cve:
+        return ''
+    return 'https://cve.mitre.org/cgi-bin/cvename.cgi?name=' + str(cve)
+
+
+@register.filter
+def jiraencode(value):
+    if not value:
+        return value
+    # jira can't handle some characters inside [] tag for urls https://jira.atlassian.com/browse/CONFSERVER-4009
+    return value.replace("|", "").replace("@", "")

@@ -1,17 +1,18 @@
-# Run with Docker Compose
+# Running with Docker Compose
 
-Docker compose is not intended for production use.
-If you want to deploy a containerized DefectDojo to a production environment,
-use the [Default installation](setup/README.md) approach.
+The docker-compose.yml in this repo is not intended for production use without first customizing it to fit your specific situation.  Please consider the docker-compose.yml files are templates to create on that fits your needs.
+Docker Compose is acceptable if you want to deploy a containerized DefectDojo to a production environment.
+It is one of the supported [Default installation](setup/README.md) methods.
 
-## Prerequisites
+# Prerequisites
 *  Docker version
     *  Installing with docker-compose requires at least docker 18.09.4 and docker-compose 1.24.0. See "Checking Docker versions" below for version errors during running docker-compose.
 *  Proxies
     *  If you're behind a corporate proxy check https://docs.docker.com/network/proxy/ . 
+*  Known issues
+    * finding images only work in `dev` and `ptvsd` mode. Making them work in `release` mode requires modifications to the docker-compose configuration.
 
-
-## Setup via Docker Compose - introduction
+# Setup via Docker Compose - introduction
 
 DefectDojo needs several docker images to run. Two of them depend on DefectDojo code:
 
@@ -28,8 +29,8 @@ When running the application without building images, the application will run b
     *  https://hub.docker.com/r/defectdojo/defectdojo-nginx
 
 
-## Setup via Docker Compose - building and running the application
-### Building images
+# Setup via Docker Compose - building and running the application
+## Building images
 
 To build images and put them in your local docker cache, run:
 
@@ -40,7 +41,7 @@ docker-compose build
 To build a single image, run: 
 
 ```zsh
-docker-compose build django
+docker-compose build uwsgi
 ```
 or
 
@@ -49,7 +50,7 @@ docker-compose build nginx
 ```
 
 
-### Run with Docker compose in release mode
+## Run with Docker compose in release mode
 To run the application based on previously built image (or based on dockerhub images if none was locally built), run: 
 
 ```zsh
@@ -62,13 +63,14 @@ This will run the application based on docker-compose.yml only.
 In this setup, you need to rebuild django and/or nginx images after each code change and restart the containers. 
 
 
-### Run with Docker compose in development mode with hot-reloading
+## Run with Docker compose in development mode with hot-reloading
 
 For development, use: 
 
 ```zsh
 cp dojo/settings/settings.dist.py dojo/settings/settings.py
 docker/setEnv.sh dev
+docker-compose build
 docker-compose up
 ```
 
@@ -82,7 +84,7 @@ This will run the application based on merged configurations from docker-compose
 * Hot-reloading for the **celeryworker** container is not yet implemented. When working on deduplication for example, restart the celeryworker container with: 
 
 ```
-docker restart django-defectdojo_celeryworker_1
+docker-compose restart celeryworker
 ```
 
 *  The mysql port is forwarded to the host so that you can access your database from outside the container. 
@@ -100,32 +102,75 @@ To update changes in static resources, served by nginx, just refresh the browser
 id -u
 ```
 
-### Access the application
-Navigate to <http://localhost:8080> where you can log in with username admin.
-To find out the admin password, check the very beginning of the console
-output of the initializer container, typically name 'django-defectdojo_initializer_1', or run the following:
+## Run with Docker compose in development mode with ptvsd (remote debug)
+
+If you want to be able to step in your code, you can activate ptvsd.Server.
+
+You can launch your local dev instance of DefectDojo as
 
 ```zsh
-container_id=(`docker ps -a \
---filter "name=django-defectdojo_initializer_1" \
-| awk 'FNR == 2 {print $1}'`) && \
-docker logs $container_id 2>&1 | grep "Admin password:"
+cp dojo/settings/settings.dist.py dojo/settings/settings.py
+docker/setEnv.sh ptvsd
+docker-compose up
 ```
 
-or:
+This will run the application based on merged configurations from docker-compose.yml and docker-compose.override.ptvsd.yml.
+
+The default configuration assumes port 3000 by default for ptvsd.
+
+### VS code
+Add the following python debug configuration (You would have to install the `ms-python.python`. Other setup may work.)
+
+```
+  {
+      "name": "Remote DefectDojo",
+      "type": "python",
+      "request": "attach",
+      "pathMappings": [
+          {
+              "localRoot": "${workspaceFolder}",
+              "remoteRoot": "/app"
+          }
+      ],
+      "port": 3000,
+      "host": "localhost"
+  }
+```
+
+You can now launch the remote debug from VS Code, place your breakpoints and step through the code.
+
+> At present, 2 caveats:
+> - Static will not be present. You would have to `docker cp` them over from the nginx container
+> - For some reason, the page loading may hang. You can stop the loading and reload, the page will ultimately appear.
+
+
+## Access the application
+Navigate to <http://localhost:8080> where you can log in with username admin.
+To find out the admin password, check the very beginning of the console
+output of the initializer container by running:
 
 ```zsh
-docker logs django-defectdojo_initializer_1
+docker-compose logs initializer | grep "Admin password:"
 ```
 
 Make sure you write down the first password generated as you'll need it when re-starting the application.
 
-### Disable the database initialization
+# Option to change the password 
+* If you dont have admin password use the below command to change the password. 
+* After starting the container and open another tab in the same folder.  
+* django-defectdojo_uwsgi_1 -- name obtained from running containers using ```zsh docker ps ``` command
+
+```zsh
+docker exec -it django-defectdojo_uwsgi_1 ./manage.py changepassword admin
+```
+
+# Exploitation, versioning
+## Disable the database initialization
 The initializer container can be disabled by exporting: `export DD_INITIALIZE=false`. 
 
 This will ensure that the database remains unchanged when re-running the application, keeping your previous settings and admin password.
 
-### Versioning
+## Versioning
 In order to use a specific version when building the images and running the containers, set the environment with 
 *  For the nginx image: `NGINX_VERSION=x.y.z`
 *  For the django image: `DJANGO_VERSION=x.y.z`
@@ -149,9 +194,7 @@ aedc404d6dee        defectdojo/defectdojo-nginx:1.0.0     "/entrypoint-nginx.sh"
 ```
 
 
-
-
-### Clean up Docker Compose
+## Clean up Docker Compose
 
 Removes all containers
 
@@ -165,14 +208,60 @@ Removes all containers, networks and the database volume
 docker-compose down --volumes
 ```
 
-### Run the unit-tests with docker
-#### Introduction
+# Run with docker using https
+## use your own  Credentials
+To secure the application by https, follow those steps
+*  Generate a private key without password
+*  Generate a CSR (Certificate Signing Request)
+*  Have the CSR signed by a certificate authority
+*  Place the private key and the certificate under the nginx folder
+*  copy your secrets into: 
+```
+        server_name                 your.servername.com;
+        ssl_certificate             /etc/nginx/ssl/nginx.crt
+        ssl_certificate_key        /etc/nginx/ssl/nginx.key;
+```
+*set the GENERATE_TLS_CERTIFICATE != True in the docker-compose.override.https.yml
+* Protect your private key from other users: 
+```
+chmod 400 nginx/*.key
+```
+
+* Run defectDojo with: 
+```
+rm -f docker-compose.override.yml
+ln -s docker-compose.override.https.yml docker-compose.override.yml
+docker-compose up
+```
+
+## create Credentials on the fly
+* you can generate a Certificate on the fly (without valid domainname etc.)
+
+* Run defectDojo with: 
+```
+rm -f docker-compose.override.yml
+ln -s docker-compose.override.https.yml docker-compose.override.yml
+docker-compose up
+```
+
+The default https port is 8443.
+
+To change the port:
+- update `nginx.conf`
+- update `docker-compose.override.https.yml` or set DD_PORT in the environment)
+- restart the application
+
+NB: some third party software may require to change the exposed port in Dockerfile.nginx as they use docker-compose declarations to discover which ports to map when publishing the application.
+
+
+# Run the tests with docker
 The unit-tests are under `dojo/unittests`
 
+The integration-tests are under `tests`
 
 
-#### Running the unit-tests 
-This will run all the tests and leave the uwsgi container up: 
+## Running the unit-tests
+This will run all unit-tests and leave the uwsgi container up: 
 
 ```
 cp dojo/settings/settings.dist.py dojo/settings/settings.py
@@ -182,7 +271,7 @@ docker-compose up
 Enter the container to run more tests:
 
 ```
-docker exec -it django-defectdojo_uwsgi_1 bash
+docker-compose exec uwsgi bash
 ```
 Rerun all the tests:
 
@@ -202,7 +291,16 @@ Run a single test. Example:
 python manage.py test dojo.unittests.test_dependency_check_parser.TestDependencyCheckParser.test_parse_without_file_has_no_findings --keepdb
 ```
 
-## Checking Docker versions
+## Running the integration-tests
+This will run all integration-tests and leave the containers up: 
+
+```
+cp dojo/settings/settings.dist.py dojo/settings/settings.py
+docker/setEnv.sh integration_tests
+docker-compose up
+```
+
+# Checking Docker versions
 
 Run the following to determine the versions for docker and docker-compose:
 

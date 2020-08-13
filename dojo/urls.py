@@ -2,12 +2,16 @@ from django.conf import settings
 from django.conf.urls import include, url
 from django.conf.urls.static import static
 from django.contrib import admin
-from rest_framework_swagger.views import get_swagger_view
 from tastypie.api import Api
 from tastypie_swagger.views import SwaggerView, ResourcesView, SchemaView
 from rest_framework.routers import DefaultRouter
 from rest_framework.authtoken import views as tokenviews
+from rest_framework import permissions
+from drf_yasg.views import get_schema_view
+from drf_yasg import openapi
 from django.http import HttpResponse
+import django_saml2_auth.views
+
 
 from dojo import views
 from dojo.api import UserResource, ProductResource, EngagementResource, \
@@ -16,14 +20,16 @@ from dojo.api import UserResource, ProductResource, EngagementResource, \
     ReImportScanResource, JiraResource, JIRA_ConfResource, EndpointResource, \
     JIRA_IssueResource, ToolProductSettingsResource, Tool_ConfigurationResource, \
     Tool_TypeResource, LanguagesResource, LanguageTypeResource, App_AnalysisResource, \
-    BuildDetails, DevelopmentEnvironmentResource, ProductTypeResource, TestTypeResource
+    BuildDetails, DevelopmentEnvironmentResource, ProductTypeResource, TestTypeResource, \
+    Note_TypeResource
 from dojo.api_v2.views import EndPointViewSet, EngagementViewSet, \
     FindingTemplatesViewSet, FindingViewSet, JiraConfigurationsViewSet, \
     JiraIssuesViewSet, JiraViewSet, ProductViewSet, ScanSettingsViewSet, \
     ScansViewSet, StubFindingsViewSet, TestsViewSet, TestTypesViewSet, \
     ToolConfigurationsViewSet, ToolProductSettingsViewSet, ToolTypesViewSet, \
     UsersViewSet, ImportScanView, ReImportScanView, ProductTypeViewSet, DojoMetaViewSet, \
-    DevelopmentEnvironmentViewSet, NotesViewSet
+    DevelopmentEnvironmentViewSet, NotesViewSet, NoteTypeViewSet, SystemSettingsViewSet, \
+    AppAnalysisViewSet, EndpointStatusViewSet
 
 from dojo.utils import get_system_setting
 from dojo.development_environment.urls import urlpatterns as dev_env_urls
@@ -41,6 +47,7 @@ from dojo.test.urls import urlpatterns as test_urls
 from dojo.test_type.urls import urlpatterns as test_type_urls
 from dojo.user.urls import urlpatterns as user_urls
 from dojo.jira_link.urls import urlpatterns as jira_urls
+from dojo.github_issue_link.urls import urlpatterns as github_urls
 from dojo.tool_type.urls import urlpatterns as tool_type_urls
 from dojo.tool_config.urls import urlpatterns as tool_config_urls
 from dojo.tool_product.urls import urlpatterns as tool_product_urls
@@ -51,6 +58,10 @@ from dojo.object.urls import urlpatterns as object_urls
 from dojo.benchmark.urls import urlpatterns as benchmark_urls
 from dojo.rules.urls import urlpatterns as rule_urls
 from dojo.notes.urls import urlpatterns as notes_urls
+from dojo.note_type.urls import urlpatterns as note_type_urls
+from dojo.google_sheet.urls import urlpatterns as google_sheets_urls
+from dojo.banner.urls import urlpatterns as banner_urls
+from dojo.survey.urls import urlpatterns as survey_urls
 
 admin.autodiscover()
 
@@ -79,6 +90,7 @@ v1_api.register(JIRA_IssueResource())
 v1_api.register(ToolProductSettingsResource())
 v1_api.register(Tool_ConfigurationResource())
 v1_api.register(Tool_TypeResource())
+v1_api.register(Note_TypeResource())
 v1_api.register(LanguagesResource())
 v1_api.register(LanguageTypeResource())
 v1_api.register(App_AnalysisResource())
@@ -87,7 +99,9 @@ v1_api.register(BuildDetails())
 
 # v2 api written in django-rest-framework
 v2_api = DefaultRouter()
+v2_api.register(r'technologies', AppAnalysisViewSet)
 v2_api.register(r'endpoints', EndPointViewSet)
+v2_api.register(r'endpoint_status', EndpointStatusViewSet)
 v2_api.register(r'engagements', EngagementViewSet)
 v2_api.register(r'development_environments', DevelopmentEnvironmentViewSet)
 v2_api.register(r'finding_templates', FindingTemplatesViewSet)
@@ -106,10 +120,12 @@ v2_api.register(r'tool_configurations', ToolConfigurationsViewSet)
 v2_api.register(r'tool_product_settings', ToolProductSettingsViewSet)
 v2_api.register(r'tool_types', ToolTypesViewSet)
 v2_api.register(r'users', UsersViewSet)
-v2_api.register(r'import-scan', ImportScanView, base_name='importscan')
-v2_api.register(r'reimport-scan', ReImportScanView, base_name='reimportscan')
-v2_api.register(r'metadata', DojoMetaViewSet, base_name='metadata')
+v2_api.register(r'import-scan', ImportScanView, basename='importscan')
+v2_api.register(r'reimport-scan', ReImportScanView, basename='reimportscan')
+v2_api.register(r'metadata', DojoMetaViewSet, basename='metadata')
 v2_api.register(r'notes', NotesViewSet)
+v2_api.register(r'note_type', NoteTypeViewSet)
+v2_api.register(r'system_settings', SystemSettingsViewSet)
 
 ur = []
 ur += dev_env_urls
@@ -127,6 +143,7 @@ ur += test_type_urls
 ur += test_urls
 ur += user_urls
 ur += jira_urls
+ur += github_urls
 ur += tool_type_urls
 ur += tool_config_urls
 ur += tool_product_urls
@@ -137,6 +154,9 @@ ur += object_urls
 ur += benchmark_urls
 ur += rule_urls
 ur += notes_urls
+ur += note_type_urls
+ur += google_sheets_urls
+ur += banner_urls
 
 swagger_urls = [
     url(r'^$', SwaggerView.as_view(), name='index'),
@@ -145,9 +165,26 @@ swagger_urls = [
     url(r'^schema/$', SchemaView.as_view(), name='schema'),
 ]
 
-schema_view = get_swagger_view(title='Defect Dojo API v2')
+schema_view = get_schema_view(
+    openapi.Info(
+        title="Defect Dojo API",
+        default_version='v2',
+        description="To use the API you need be authorized.",
+    ),
+    # if public=False, includes only endpoints the current user has access to
+    public=True,
+    # The API of a OpenSource project should be public accessible
+    permission_classes=[permissions.AllowAny],
+)
 
 urlpatterns = [
+    # These are the SAML2 related URLs. You can change "^saml2_auth/" regex to
+    # any path you want, like "^sso_auth/", "^sso_login/", etc. (required)
+    url(r'^saml2/', include('django_saml2_auth.urls')),
+    # The following line will replace the default user login with SAML2 (optional)
+    # If you want to specific the after-login-redirect-URL, use parameter "?next=/the/path/you/want"
+    # with this view.
+    url(r'^saml2/login/$', django_saml2_auth.views.signin),
     #  tastypie api
     url(r'^%sapi/' % get_system_setting('url_prefix'), include(v1_api.urls)),
     #  Django Rest Framework API v2
@@ -164,10 +201,15 @@ urlpatterns = [
         name='action_history'),
     url(r'^%s' % get_system_setting('url_prefix'), include(ur)),
     url(r'^api/v2/api-token-auth/', tokenviews.obtain_auth_token),
-    url(r'^api/v2/doc/', schema_view, name="api_v2_schema"),
+    url(r'^api/v2/doc/', schema_view.with_ui('swagger', cache_timeout=0), name='api_v2_schema'),
     url(r'^robots.txt', lambda x: HttpResponse("User-Agent: *\nDisallow: /", content_type="text/plain"), name="robots_file"),
-
 ]
+
+urlpatterns += survey_urls
+
+if hasattr(settings, 'DJANGO_METRICS_ENABLED'):
+    if settings.DJANGO_METRICS_ENABLED:
+        urlpatterns += [url(r'^%sdjango_metrics/' % get_system_setting('url_prefix'), include('django_prometheus.urls'))]
 
 if hasattr(settings, 'DJANGO_ADMIN_ENABLED'):
     if settings.DJANGO_ADMIN_ENABLED:
