@@ -1,6 +1,9 @@
 from .parser_helper import get_defectdojo_findings
 from dojo.models import Finding
 import re
+import logging
+
+logger = logging.getLogger(__name__)
 
 __author__ = "Vijay Bheemineni"
 __license__ = "MIT"
@@ -14,8 +17,10 @@ class AcunetixScannerParser(object):
     """
 
     def __init__(self, xml_output, test):
-        acunetix_defectdojo_findings = get_defectdojo_findings(xml_output)
         self.items = []
+        if xml_output is None:
+            return
+        acunetix_defectdojo_findings = get_defectdojo_findings(xml_output)
         self.set_defectdojo_findings(acunetix_defectdojo_findings, test)
 
     def set_defectdojo_findings(self, acunetix_defectdojo_findings, test):
@@ -48,7 +53,7 @@ class AcunetixScannerParser(object):
                 )
                 defectdojo_findings.append(finding)
             else:
-                print(("Duplicate finding : {defectdojo_title}".format(defectdojo_title=defectdojo_title)))
+                logger.debug(("Duplicate finding : {defectdojo_title}".format(defectdojo_title=defectdojo_title)))
 
         self.items = defectdojo_findings
 
@@ -67,7 +72,7 @@ def get_defectdojo_date(date):
     mon = date[1]
     year = date[2]
     defectdojo_date = "{year}-{mon}-{day}".format(year=year, mon=mon, day=day)
-    print(defectdojo_date)
+    # print(defectdojo_date)
     return defectdojo_date
 
 
@@ -77,7 +82,10 @@ def get_cwe_number(cwe):
     :param cwe:
     :return: cwe number
     """
-    return cwe.split("-")[1]
+    if cwe is None:
+        return None
+    else:
+        return cwe.split("-")[1]
 
 
 def get_severity(severity):

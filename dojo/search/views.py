@@ -8,8 +8,12 @@ from dojo.forms import SimpleSearchForm
 from dojo.models import Finding, Finding_Template, Product, Test, Endpoint, Engagement, Languages, \
     App_Analysis
 from dojo.utils import add_breadcrumb
+import re
 
 logger = logging.getLogger(__name__)
+
+# explicitly use our own regex pattern here as django-watson is sensitive so we want to control it here independently of models.py etc.
+cve_pattern = re.compile(r'(^CVE-(1999|2\d{3})-(0\d{2}[0-9]|[1-9]\d{3,}))$')
 
 
 def simple_search(request):
@@ -42,25 +46,40 @@ def simple_search(request):
             clean_query = form.cleaned_data['query']
             search_operator = ""
             # Check for search operator like finding:, endpoint:, test: product:
+            original_clean_query = clean_query
+            # print('clean_query: ', clean_query)
             if ":" in clean_query:
                 operator = clean_query.split(":")
                 search_operator = operator[0]
                 clean_query = operator[1].lstrip()
+
+            # if the query contains hyphens, django-watson will escape these leading to problems.
+            # for cve we make this workaround because we really want to be able to search for CVEs
+            # problem still remains for other case, i.e. searching for "valentijn-scholten" will return no results because of the hyphen.
+            # see:
+            # - https://github.com/etianen/django-watson/issues/223
+            # - https://github.com/DefectDojo/django-DefectDojo/issues/1092
+            # - https://github.com/DefectDojo/django-DefectDojo/issues/2081
+
+            if bool(cve_pattern.match(clean_query)):
+                clean_query = '\'' + clean_query + '\''
+                # print('new clean_query: ', clean_query)
+
             tags = clean_query
             if request.user.is_staff:
-                if "finding" in search_operator or search_operator is "":
+                if "finding" in search_operator or "cve" in search_operator or "id" in search_operator or search_operator == "":
                     findings = watson.search(clean_query, models=(Finding,))
 
-                if "template" in search_operator or search_operator is "":
+                if "template" in search_operator or search_operator == "":
                     finding_templates = watson.search(clean_query, models=(Finding_Template,))
 
-                if "test" in search_operator or search_operator is "":
+                if "test" in search_operator or search_operator == "":
                     tests = watson.search(clean_query, models=(Test,))
 
-                if "product" in search_operator or search_operator is "":
+                if "product" in search_operator or search_operator == "":
                     products = watson.search(clean_query, models=(Product,))
 
-                if "tag" in search_operator or search_operator is "":
+                if "tag" in search_operator or search_operator == "":
                     tagged_findings = TaggedItem.objects.get_by_model(Finding,
                                                                       tags)
                     tagged_finding_templates = TaggedItem.objects.get_by_model(Finding_Template,
@@ -74,52 +93,47 @@ def simple_search(request):
                         Engagement, tags)
                 # endpoints = watson.search(clean_query, models=(Endpoint,))
 
-                if "endpoint" in search_operator or search_operator is "":
+                if "endpoint" in search_operator or search_operator == "":
                     endpoints = Endpoint.objects.filter(Q(host__icontains=clean_query) | Q(path__icontains=clean_query) | Q(fqdn__icontains=clean_query) | Q(protocol__icontains=clean_query))
 
-                if "engagement" in search_operator or search_operator is "":
+                if "engagement" in search_operator or search_operator == "":
                     engagements = watson.search(clean_query, models=(Engagement,))
 
-                if "language" in search_operator or search_operator is "":
+                if "language" in search_operator or search_operator == "":
                     languages = Languages.objects.filter(language__language__icontains=clean_query)
 
-                if "technology" in search_operator or search_operator is "":
+                if "technology" in search_operator or search_operator == "":
                     app_analysis = App_Analysis.objects.filter(name__icontains=clean_query)
 
             else:
-                if "finding" in search_operator or search_operator is "":
+                if "finding" in search_operator or "cve" in search_operator or "id" in search_operator or search_operator == "":
                     findings = watson.search(clean_query, models=(
                         Finding.objects.filter(
                             test__engagement__product__authorized_users__in=[
                                 request.user]),))
 
-                if "template" in search_operator or search_operator is "":
-                    finding_templates = watson.search(clean_query, models=(
-                        Finding_Template.objects.filter(
-                            authorized_users__in=[
-                                request.user]),))
+                if "template" in search_operator or search_operator == "":
+                    finding_templates = watson.search(clean_query, models=(Finding_Template,))
 
-                if "test" in search_operator or search_operator is "":
+                if "test" in search_operator or search_operator == "":
                     tests = watson.search(
                         clean_query,
                         models=(Test.objects.filter(
                             engagement__product__authorized_users__in=[
                                 request.user]),))
 
-                if "product" in search_operator or search_operator is "":
+                if "product" in search_operator or search_operator == "":
                     products = watson.search(clean_query, models=(
                         Product.objects.filter(authorized_users__in=[
                             request.user]),))
 
-                if "tag" in search_operator or search_operator is "":
+                if "tag" in search_operator or search_operator == "":
                     tagged_findings = TaggedItem.objects.get_by_model(
                         Finding.objects.filter(
                             test__engagement__product__authorized_users__in=[
                                 request.user]), tags)
-                    tagged_finding_templates = TaggedItem.objects.get_by_model(
-                        Finding_Template.objects.filter(
-                            authorized_users__in=[
-                                request.user]), tags)
+                    tagged_finding_templates = TaggedItem.objects.get_by_model(Finding_Template,
+                                                                               tags)
                     tagged_tests = TaggedItem.objects.get_by_model(
                         Test.objects.filter(
                             engagement__product__authorized_users__in=[
@@ -133,12 +147,29 @@ def simple_search(request):
                     tagged_engagements = TaggedItem.objects.get_by_model(
                         Engagement.objects.filter(
                             product__authorized_users__in=[request.user]), tags)
+
+            if findings:
+                findings = findings.prefetch_related('object', 'object__test', 'object__test__engagement', 'object__test__engagement__product',
+                 'object__risk_acceptance_set', 'object__test__test_type', 'object__tagged_items__tag', 'object__test__engagement__product__tagged_items__tag')
+
+            if engagements:
+                engagements = engagements.prefetch_related('object', 'object__product', 'object__product__tagged_items__tag', 'object__tagged_items__tag')
+
+            if products:
+                products = products.prefetch_related('object', 'object__tagged_items__tag')
+
+            if tests:
+                tests = tests.prefetch_related('object', 'object__engagement', 'object__engagement__product', 'object__test_type', 'object__engagement__tagged_items__tag')
+
+            if languages:
+                languages = languages.prefetch_related('object', 'object__product', 'object__product__tagged_items__tag')
+
         else:
             form = SimpleSearchForm()
         add_breadcrumb(title="Simple Search", top_level=True, request=request)
 
     response = render(request, 'dojo/simple_search.html', {
-        'clean_query': clean_query,
+        'clean_query': original_clean_query,
         'languages': languages,
         'app_analysis': app_analysis,
         'tests': tests,

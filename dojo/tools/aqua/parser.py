@@ -36,41 +36,22 @@ class AquaJSONParser(object):
 
                 for vuln in vulnerabilities:
                     item = get_item(resource, vuln, test)
-                    if 'name' in vuln:
-                        unique_key = resource.get('cpe') + vuln.get('name')
-                    else:
-                        unique_key = resource.get('cpe') + "None"
-
+                    unique_key = resource.get('cpe') + vuln.get('name', 'None')
                     items[unique_key] = item
+        elif 'cves' in tree:
+            for cve in tree['cves']:
+                unique_key = cve.get('file') + cve.get('name')
+                items[unique_key] = get_item_v2(cve, test)
 
         return list(items.values())
 
 
 def get_item(resource, vuln, test):
-    if 'name' in resource:
-        resource_name = resource.get('name')
-    else:
-        resource_name = resource.get('path')
-
-    if 'version' in resource:
-        resource_version = resource.get('version')
-    else:
-        resource_version = "No version"
-
-    if 'name' in vuln:
-        cve = vuln.get('name')
-    else:
-        cve = "No CVE"
-
-    if 'fix_version' in vuln:
-        fix_version = vuln['fix_version']
-    else:
-        fix_version = "None"
-
-    if 'description' in vuln:
-        description = vuln.get('description')
-    else:
-        description = "No description."
+    resource_name = resource.get('name', resource.get('path'))
+    resource_version = resource.get('version', 'No version')
+    cve = vuln.get('name', 'No CVE')
+    fix_version = vuln.get('fix_version', 'None')
+    description = vuln.get('description', 'No description.')
 
     url = ""
     if 'nvd_url' in vuln:
@@ -98,28 +79,57 @@ def get_item(resource, vuln, test):
         severity_justification += "\nNVD v3 vectors: {}".format(vuln.get('nvd_vectors_v3'))
     severity_justification += "\n{}".format(used_for_classification)
 
-    if score == 0:
-        severity = "Info"
-    elif score <= 3.9:
-        severity = "Low"
-    elif score > 4.0 and score <= 6.9:
-        severity = "Medium"
-    elif score > 7.0 and score <= 8.9:
-        severity = "High"
-    else:
-        severity = "Critical"
+    severity = severity_of(score)
 
-    finding = Finding(
+    return Finding(
         title=cve + " - " + resource_name + " (" + resource_version + ") ",
         test=test,
         severity=severity,
         severity_justification=severity_justification,
         cwe=0,
         cve=cve,
-        description=description,
+        description=description.strip(),
         mitigation=fix_version,
         references=url,
+        component_name=resource.get('name'),
+        component_version=resource.get('version'),
         impact=severity)
 
-    finding.description = finding.description.strip()
-    return finding
+
+def get_item_v2(item, test):
+    cve = item['name']
+    file_path = item['file']
+    url = item.get('url')
+    severity = severity_of(float(item['score']))
+    description = item.get('description')
+    solution = item.get('solution')
+    fix_version = item.get('fix_version')
+    if solution:
+        mitigation = solution
+    elif fix_version:
+        mitigation = ('Upgrade to ' + str(fix_version))
+    else:
+        mitigation = 'No known mitigation'
+
+    return Finding(title=str(cve) + ': ' + str(file_path),
+                   description=description,
+                   url=url,
+                   cwe=0,
+                   cve=cve,
+                   test=test,
+                   severity=severity,
+                   impact=severity,
+                   mitigation=mitigation)
+
+
+def severity_of(score):
+    if score == 0:
+        return "Info"
+    elif score <= 3.9:
+        return "Low"
+    elif 4.0 < score <= 6.9:
+        return "Medium"
+    elif 7.0 < score <= 8.9:
+        return "High"
+    else:
+        return "Critical"

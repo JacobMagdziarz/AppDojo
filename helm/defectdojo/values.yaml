@@ -1,17 +1,17 @@
 ---
 # Global settings
 # create defectdojo specific secret
-createSecret: true
-# create rabbitmq secret outside of rabbitmq chart
-createRabbitMqSecret: true
-# create redis secret outside of redis chart
-createRedisSecret: true
-# create mysql secret outside of mysql chart
-createMysqlSecret: true
-# create postgresql secret outside of postgresql chart
-createPostgresqlSecret: true
+createSecret: false
+# create rabbitmq secret in defectdojo chart, outside of rabbitmq chart
+createRabbitMqSecret: false
+# create redis secret in defectdojo chart, outside of redis chart
+createRedisSecret: false
+# create mysql secret in defectdojo chart, outside of mysql chart
+createMysqlSecret: false
+# create postgresql secret in defectdojo chart, outside of postgresql chart
+createPostgresqlSecret: false
 ## Configuration value to select database type
-## Option to use "postgresql" or "mysql" database type, by default "postgresql" is chosen
+## Option to use "postgresql" or "mysql" database type, by default "mysql" is chosen
 ## Set the "enable" field to true of the database type you select (if you want to use internal database) and false of the one you don't select
 database: postgresql
 host: defectdojo.default.minikube.local
@@ -24,9 +24,18 @@ tag: latest
 
 admin:
   user: admin
+  password:
   firstName: Administrator
   lastName: User
   mail: admin@defectdojo.local
+  secretKey:
+  credentialAes256Key:
+  metricsHttpAuthPassword:
+
+monitoring:
+  enabled: false
+
+annotations: {}
 
 # Components
 celery:
@@ -39,6 +48,9 @@ celery:
       requests:
         cpu: 100m
         memory: 128Mi
+      limits:
+        cpu: 2000m
+        memory: 256Mi
     tolerations: []
   worker:
     affinity: {}
@@ -49,6 +61,9 @@ celery:
       requests:
         cpu: 100m
         memory: 128Mi
+      limits:
+        cpu: 2000m
+        memory: 256Mi
     tolerations: []
 
 django:
@@ -60,11 +75,20 @@ django:
     annotations:
       # Restricts the type of ingress controller that can interact with our chart (nginx, traefik, ...)
       #kubernetes.io/ingress.class: nginx
+      # Depending on the size and complexity of your scans, you might want to increase the default ingress timeouts if you see repeated 504 Gateway Timeouts
+      #nginx.ingress.kubernetes.io/proxy-read-timeout: "1800"
+      #nginx.ingress.kubernetes.io/proxy-send-timeout: "1800"
   nginx:
+    tls:
+      enabled: false
+      generateCertificate: false
     resources:
       requests:
         cpu: 100m
         memory: 128Mi
+      limits:
+        cpu: 2000m
+        memory: 256Mi
   nodeSelector: {}
   replicas: 1
   tolerations: []
@@ -73,32 +97,40 @@ django:
       requests:
         cpu: 100m
         memory: 128Mi
+      limits:
+        cpu: 2000m
+        memory: 512Mi
 
 initializer:
   run: true
   keepSeconds: 60
+  affinity: {}
+  nodeSelector: {}
   resources:
     requests:
       cpu: 100m
       memory: 128Mi
+    limits:
+      cpu: 2000m
+      memory: 256Mi
 
 mysql:
   enabled: false
   mysqlUser: defectdojo
+  mysqlPassword: ""
+  mysqlRootPassword: ""
   existingSecret: defectdojo-mysql-specific
   mysqlDatabase: defectdojo
   service:
     port: 3306  
   # To use an external mySQL instance, set enabled to false and uncomment
   # the line below:
-  # mysqlServer: ""
-  # To use an external secret for the password for an external mySQL instance,
-  # set enabled to false and provide the name of the secret on the line below:
-  # mysqlPasswordSecret: ""  
+  mysqlServer: "127.0.0.1"
 
 postgresql:
   enabled: true
   postgresqlUsername: defectdojo
+  postgresqlPassword: ""
   postgresqlDatabase: defectdojo
   existingSecret: defectdojo-postgresql-specific
   persistence:
@@ -109,22 +141,40 @@ postgresql:
     port: 5432  
   # To use an external PostgreSQL instance, set enabled to false and uncomment
   # the line below:
-  # postgresServer: ""
-  # To use an external secret for the password for PostgreSQL
-  # instance, set enabled to false and provide the name of the secret on the
-  # line below:
-  # existingSecret: ""    
+  postgresServer: "127.0.0.1"
+  master:
+    affinity: {}
+    nodeSelector: {}
+  slave:
+    affinity: {}
+    nodeSelector: {}
+
+# Google CloudSQL support in GKE via gce-proxy
+cloudsql:
+  # To use CloudSQL in GKE set 'enable: true'
+  enabled: false
+  image:
+    # set repo and image tag of gce-proxy
+    repository: gcr.io/cloudsql-docker/gce-proxy
+    tag: 1.17
+    pullPolicy: IfNotPresent
+  # set CloudSQL instance: 'project:zone:instancname'
+  instance: ""
 
 rabbitmq:
   enabled: true
   replicas: 1
   rabbitmq:
+    password: ""
+    erlangCookie: ""
     existingPasswordSecret: defectdojo-rabbitmq-specific
     existingErlangSecret: defectdojo-rabbitmq-specific
+    affinity: {}
+    nodeSelector: {}
 
 redis:
   enabled: false
   existingSecret: defectdojo-redis-specific
+  password: ""
   cluster:
     slaveCount: 1
-

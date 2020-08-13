@@ -1,13 +1,16 @@
 from dojo.tools.burp.parser import BurpXmlParser
+from dojo.tools.dsop.parser import DsopParser
 from dojo.tools.nessus.parser import NessusCSVParser, NessusXMLParser
 from dojo.tools.nmap.parser import NmapXMLParser
 from dojo.tools.nexpose.parser import NexposeFullXmlParser
 from dojo.tools.veracode.parser import VeracodeXMLParser
 from dojo.tools.zap.parser import ZapXmlParser
 from dojo.tools.checkmarx.parser import CheckmarxXMLParser
-from dojo.tools.crashtest_security.parser import CrashtestSecurityXmlParser
+from dojo.tools.crashtest_security_xml.parser import CrashtestSecurityXmlParser
+from dojo.tools.crashtest_security_json.parser import CrashtestSecurityJsonParser
 from dojo.tools.contrast.parser import ContrastCSVParser
 from dojo.tools.bandit.parser import BanditParser
+from dojo.tools.eslint.parser import ESLintParser
 from dojo.tools.appspider.parser import AppSpiderXMLParser
 from dojo.tools.arachni.parser import ArachniJSONParser
 from dojo.tools.vcg.parser import VCGParser
@@ -19,6 +22,7 @@ from dojo.tools.npm_audit.parser import NpmAuditParser
 from dojo.tools.php_symfony_security_check.parser import PhpSymfonySecurityCheckParser
 from dojo.tools.generic.parser import GenericFindingUploadCsvParser
 from dojo.tools.qualys.parser import QualysParser
+from dojo.tools.qualys_infrascan_webgui.parser import QualysInfraScanParser
 from dojo.tools.qualys_webapp.parser import QualysWebAppParser
 from dojo.tools.snyk.parser import SnykParser
 from dojo.tools.gosec.parser import GosecScannerParser
@@ -65,11 +69,23 @@ from dojo.tools.testssl.parser import TestsslCSVParser
 from dojo.tools.hadolint.parser import HadolintParser
 from dojo.tools import SCAN_SONARQUBE_API
 from dojo.tools.aqua.parser import AquaJSONParser
+from dojo.tools.blackduck_component_risk.parser import BlackduckHubParser
 from dojo.tools.h1.parser import HackerOneJSONParser
 from dojo.tools.xanitizer.parser import XanitizerXMLParser
 from dojo.tools.trivy.parser import TrivyParser
 from dojo.tools.outpost24.parser import Outpost24Parser
-
+from dojo.tools.burp_enterprise.parser import BurpEnterpriseHtmlParser
+from dojo.tools.anchore_enterprise.parser import AnchoreEnterprisePolicyCheckParser
+from dojo.tools.gitleaks.parser import GitleaksJSONParser
+from dojo.tools.harbor_vulnerability.parser import HarborVulnerabilityParser
+from dojo.tools.github_vulnerability.parser import GithubVulnerabilityParser
+from dojo.tools.choctaw_hog.parser import ChoctawhogParser
+from dojo.tools.gitlab_sast.parser import GitlabSastReportParser
+from dojo.tools.yarn_audit.parser import YarnAuditParser
+from dojo.tools.bugcrowd.parser import BugCrowdCSVParser
+from dojo.tools.huskyci.parser import HuskyCIReportParser
+from dojo.tools.ccvs.parser import CCVSReportParser
+from dojo.tools.awssecurityhub.parser import AwsSecurityFindingFormatParser
 
 
 __author__ = 'Jay Paz'
@@ -81,6 +97,8 @@ def import_parser_factory(file, test, active, verified, scan_type=None):
         scan_type = test.test_type.name
     if scan_type == "Burp Scan":
         parser = BurpXmlParser(file, test)
+    elif scan_type == "Burp Enterprise Scan":
+        parser = BurpEnterpriseHtmlParser(file, test)
     elif scan_type == "Nessus Scan":
         filename = file.name.lower()
         if filename.endswith("csv"):
@@ -103,10 +121,14 @@ def import_parser_factory(file, test, active, verified, scan_type=None):
         parser = CheckmarxXMLParser(file, test, 'detailed')
     elif scan_type == "Contrast Scan":
         parser = ContrastCSVParser(file, test)
-    elif scan_type == "Crashtest Security Scan":
+    elif scan_type == "Crashtest Security JSON File":
+        parser = CrashtestSecurityJsonParser(file, test)
+    elif scan_type == "Crashtest Security XML File":
         parser = CrashtestSecurityXmlParser(file, test)
     elif scan_type == "Bandit Scan":
         parser = BanditParser(file, test)
+    elif scan_type == "ESLint Scan":
+        parser = ESLintParser(file, test)
     elif scan_type == "ZAP Scan":
         parser = ZapXmlParser(file, test)
     elif scan_type == "AppSpider Scan":
@@ -131,6 +153,8 @@ def import_parser_factory(file, test, active, verified, scan_type=None):
         parser = GenericFindingUploadCsvParser(file, test, active, verified)
     elif scan_type == 'Qualys Scan':
         parser = QualysParser(file, test)
+    elif scan_type == 'Qualys Infrastructure Scan (WebGUI XML)':
+        parser = QualysInfraScanParser(file, test)
     elif scan_type == 'Qualys Webapp Scan':
         parser = QualysWebAppParser(file, test)
     elif scan_type == "OpenVAS CSV":
@@ -189,6 +213,8 @@ def import_parser_factory(file, test, active, verified, scan_type=None):
         parser = KiuwanCSVParser(file, test)
     elif scan_type == 'Blackduck Hub Scan':
         parser = BlackduckHubCSVParser(file, test)
+    elif scan_type == 'Blackduck Component Risk':
+        parser = BlackduckHubParser(file, test)
     elif scan_type == 'Sonatype Application Scan':
         parser = SonatypeJSONParser(file, test)
     elif scan_type == 'Openscap Vulnerability Scan':
@@ -227,6 +253,30 @@ def import_parser_factory(file, test, active, verified, scan_type=None):
         parser = TrivyParser(file, test)
     elif scan_type == 'Outpost24 Scan':
         parser = Outpost24Parser(file, test)
+    elif scan_type == 'DSOP Scan':
+        parser = DsopParser(file, test)
+    elif scan_type == 'Anchore Enterprise Policy Check':
+        parser = AnchoreEnterprisePolicyCheckParser(file, test)
+    elif scan_type == 'Gitleaks Scan':
+        parser = GitleaksJSONParser(file, test)
+    elif scan_type == 'Harbor Vulnerability Scan':
+        parser = HarborVulnerabilityParser(file, test)
+    elif scan_type == 'Github Vulnerability Scan':
+        parser = GithubVulnerabilityParser(file, test)
+    elif scan_type == 'Choctaw Hog Scan':
+        parser = ChoctawhogParser(file, test)
+    elif scan_type == 'GitLab SAST Report':
+        parser = GitlabSastReportParser(file, test)
+    elif scan_type == 'Yarn Audit Scan':
+        parser = YarnAuditParser(file, test)
+    elif scan_type == 'BugCrowd Scan':
+        parser = BugCrowdCSVParser(file, test)
+    elif scan_type == 'HuskyCI Report':
+        parser = HuskyCIReportParser(file, test)
+    elif scan_type == 'CCVS Report':
+        parser = CCVSReportParser(file, test)
+    elif scan_type == 'AWS Security Hub Scan':
+        parser = AwsSecurityFindingFormatParser(file, test)
     else:
         raise ValueError('Unknown Test Type')
 
